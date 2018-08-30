@@ -1,3 +1,4 @@
+import alexnet
 import argparse
 from math import floor
 import numpy as np
@@ -37,7 +38,7 @@ NUM_CLASSES = 20
 # Loads the pascal data set
 def load_pascal(data_directory, split='train'): # split = train/test/val
     assert split == 'train' or split == 'test' or split == 'val'
-    # Get the cached npy file names    
+    # Get the cached npy file names
     cached_images = data_directory + '/images_' + split
     cached_labels = data_directory + '/labels_' + split
     cached_weights = data_directory + '/weights_' + split
@@ -54,7 +55,7 @@ def load_pascal(data_directory, split='train'): # split = train/test/val
         image_file = open(data_directory + '/VOCdevkit/VOC2007/ImageSets/Main/' + split + '.txt','r').read()
         split_image_file = image_file.split('\n')[:-1]
         num_images = len(split_image_file)
-	
+
         # Pre-allocate the data for loading
         images = np.empty([num_images,224,224,3],dtype=np.float32)
         labels = np.empty([num_images,NUM_CLASSES],dtype=np.int32)
@@ -64,13 +65,13 @@ def load_pascal(data_directory, split='train'): # split = train/test/val
         for i in range(num_images):
             image_name  = split_image_file[i]
             input_img   = Image.open(data_directory + '/VOCdevkit/VOC2007/JPEGImages/' + image_name + '.jpg')
-            # Scale the image to the expected AlexNet size 
+            # Scale the image to the expected AlexNet size
             scaled_img  = np.asarray(input_img.resize([224,224]))
             images[i,:,:,:] = scaled_img[np.newaxis,:,:,:]
             image_label     = np.empty([0])
             image_weight    = np.empty([0])
-            
-            # Populate the labels and weights 
+
+            # Populate the labels and weights
             for class_name in CLASS_NAMES:
                 split_file = open(data_directory + '/VOCdevkit/VOC2007/ImageSets/Main/' + class_name + '_' + split + '.txt','r').read()
                 img_pos = split_file.find(image_name)+len(image_name)+1
@@ -110,52 +111,50 @@ def main():
     args = parse_args()
     # Load the train data
     (train_images, train_labels, train_weights) = load_pascal(args.data_directory, split='train')
-	
+
     # Avoid loading other data for now
     # (test_images, test_labels, test_weights) = load_pascal(args.data_directory, split='test')
     # (val_images, val_labels, val_weights) = load_pascal(args.data_directory, split='val')
 
-    # Convert the training data to tensors 
-    train_images = tf.convert_to_tensor(train_images)
-    train_labels = tf.convert_to_tensor(train_labels)
-    train_weights = tf.convert_to_tensor(train_weights)
-        
-    # Setup a way to write summary data
-    summary_writer = tf.summary.FileWriter('tmp/tensorboard_example', graph=tf.get_default_graph())
-  
-    num_train_images = train_images.shape[0].value
+    num_train_images = train_images.shape[0]
     batch_size = 10
     num_epochs = 5
-    # Epoch = a full cycle through all of the training images 
-    for epoch in range(num_epochs):
-        # Randomly order the training images
-        training_order = range(num_train_images) 
-        shuffle(training_order) 
-        
-        # Split the training images into batches
-        for batch_num in range(int(floor(num_train_images/batch_size))):
-            # Extract the data for this batch
-            batch_indices = training_order[batch_num*batch_size:(batch_num + 1)*batch_size]
-            batch_images = tf.gather(train_images, batch_indices)
-            batch_labels = tf.gather(train_labels, batch_indices)
-            batch_weights = tf.gather(train_weights, batch_indices)
 
-            # Log some dummy data to tensorboard
-            loss = 0.2
-            tf.summary.scalar('Loss', loss)
-            tf.summary.image('Batch Images', batch_images)
-            merged_summary = tf.summary.merge_all()
+    inputs = tf.placeholder(tf.float32, shape=(batch_size, 224, 224, 3))
 
-            # Setup a TensorFlow session 
-            with tf.Session() as sess:
-                # Initialize global variables
-                sess.run(tf.global_variables_initializer())
+    outputs, end_points = alexnet.alexnet_v2(inputs)
 
-                summary = sess.run(merged_summary)
-                summary_writer.add_summary(summary) 
-            
+    # Log some dummy data to tensorboard
+    summary_writer = tf.summary.FileWriter('tmp/tensorboard_example', graph=tf.get_default_graph())
+    loss = 0.2
+    tf.summary.scalar('Loss', loss)
+    tf.summary.image('Batch Images', inputs)
+    merged_summary = tf.summary.merge_all()
+
+
+    # Setup a TensorFlow session
+    with tf.Session() as sess:
+        # Initialize global variables
+        sess.run(tf.global_variables_initializer())
+        # Epoch = a full cycle through all of the training images
+        for epoch in range(num_epochs):
+            # Randomly order the training images
+            training_order = range(num_train_images)
+            shuffle(training_order)
+
+            # Split the training images into batches
+            for batch_num in range(int(floor(num_train_images/batch_size))):
+                # Extract the data for this batch
+                batch_indices = training_order[batch_num*batch_size:(batch_num + 1)*batch_size]
+                batch_images = np.take(train_images, batch_indices, axis=0)
+                batch_labels = np.take(train_labels, batch_indices, axis=0)
+                batch_weights = np.take(train_weights, batch_indices, axis=0)
+
+                [output_logits, summary] = sess.run([outputs, merged_summary], feed_dict={inputs: batch_images})
+                summary_writer.add_summary(summary)
+
                 # Try setting a trace to poke around with different variables
-                # pdb.set_trace() 
+                # pdb.set_trace()
                 # print(outputs)
 
 if __name__ == '__main__':
