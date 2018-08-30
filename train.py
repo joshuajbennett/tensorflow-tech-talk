@@ -1,4 +1,3 @@
-import alexnet
 import argparse
 from math import floor
 import numpy as np
@@ -117,41 +116,47 @@ def main():
     # (val_images, val_labels, val_weights) = load_pascal(args.data_directory, split='val')
 
     # Convert the training data to tensors 
-    with tf.device("/cpu:0"):
-        train_images = tf.convert_to_tensor(train_images)
-        train_labels = tf.convert_to_tensor(train_labels)
-        train_weights = tf.convert_to_tensor(train_weights)
-
-    # Setup a TensorFlow session 
-    with tf.Session() as sess:
-        # Initialize global variables
-        sess.run(tf.global_variables_initializer())
+    train_images = tf.convert_to_tensor(train_images)
+    train_labels = tf.convert_to_tensor(train_labels)
+    train_weights = tf.convert_to_tensor(train_weights)
         
-        # Setup a way to write summary data
-        summary_writer = tf.summary.FileWriter('/tmp/tensorboard_example', graph=tf.get_default_graph())
-      
-        num_train_images = train_images.shape[0].value
-        batch_size = 10
-        num_epochs = 5
-        # Epoch = a full cycle through all of the training images 
-        for epoch in range(num_epochs):
-            # Randomly order the training images
-            training_order = range(num_train_images) 
-            shuffle(training_order) 
-            
-            # Split the training images into batches
-            for batch_num in range(int(floor(num_train_images/batch_size))):
-                # Extract the data for this batch
-                batch_indices = training_order[batch_num*batch_size:(batch_num + 1)*batch_size]
-                batch_images = tf.gather(train_images, batch_indices)
-                batch_labels = tf.gather(train_labels, batch_indices)
-                batch_weights = tf.gather(train_weights, batch_indices)
+    # Setup a way to write summary data
+    summary_writer = tf.summary.FileWriter('tmp/tensorboard_example', graph=tf.get_default_graph())
+  
+    num_train_images = train_images.shape[0].value
+    batch_size = 10
+    num_epochs = 5
+    # Epoch = a full cycle through all of the training images 
+    for epoch in range(num_epochs):
+        # Randomly order the training images
+        training_order = range(num_train_images) 
+        shuffle(training_order) 
+        
+        # Split the training images into batches
+        for batch_num in range(int(floor(num_train_images/batch_size))):
+            # Extract the data for this batch
+            batch_indices = training_order[batch_num*batch_size:(batch_num + 1)*batch_size]
+            batch_images = tf.gather(train_images, batch_indices)
+            batch_labels = tf.gather(train_labels, batch_indices)
+            batch_weights = tf.gather(train_weights, batch_indices)
 
-                # Run the batch through the alexnet model
-                with tf.contrib.slim.arg_scope(alexnet.alexnet_v2_arg_scope()):
-                    outputs, end_points = alexnet.alexnet_v2(batch_images, NUM_CLASSES)
-                pdb.set_trace() 
-                print(outputs)
+            # Log some dummy data to tensorboard
+            loss = 0.2
+            tf.summary.scalar('Loss', loss)
+            tf.summary.image('Batch Images', batch_images)
+            merged_summary = tf.summary.merge_all()
+
+            # Setup a TensorFlow session 
+            with tf.Session() as sess:
+                # Initialize global variables
+                sess.run(tf.global_variables_initializer())
+
+                summary = sess.run(merged_summary)
+                summary_writer.add_summary(summary) 
+            
+                # Try setting a trace to poke around with different variables
+                # pdb.set_trace() 
+                # print(outputs)
 
 if __name__ == '__main__':
     main()
