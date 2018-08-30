@@ -2,6 +2,7 @@ import sys
 import argparse
 import pdb
 from PIL import Image
+import os.path
 import numpy as np
 import tensorflow as tf
 
@@ -30,37 +31,51 @@ CLASS_NAMES = [
 
 NUM_CLASSES = 20
 
-def load_pascal(data_directory, split='train'): # train/test/val
-    image_file = open(data_directory + "/VOCdevkit/VOC2007/ImageSets/Main/" + split + ".txt","r").read()
-    split_image_file = image_file.split('\n')[:-1]
-    num_images = len(split_image_file)
-
-    images = np.empty([num_images,224,224,3],dtype=np.float32)
-    labels = np.empty([num_images,NUM_CLASSES],dtype=np.int32)
-    weights = np.empty([num_images,NUM_CLASSES],dtype=np.int32)
-
-    for i in range(num_images):
-        image_name  = split_image_file[i]
-        input_img   = Image.open(data_directory + "/VOCdevkit/VOC2007/JPEGImages/" + image_name + ".jpg")
-        scaled_img  = np.asarray(input_img.resize([224,224]))
-        images[i,:,:,:] = scaled_img[np.newaxis,:,:,:]
-        image_label     = np.empty([0])
-        image_weight    = np.empty([0])
-        for class_name in CLASS_NAMES:
-            split_file = open(data_directory + "/VOCdevkit/VOC2007/ImageSets/Main/" + class_name + "_" + split + ".txt","r").read()
-            img_pos = split_file.find(image_name)+len(image_name)+1
-            img = split_file[img_pos:img_pos+2]
-            if img == " 1":
-                image_label  = np.append(image_label,[1],axis=0)
-                image_weight = np.append(image_weight,[1],axis=0)
-            else:
-                image_label  = np.append(image_label,[0],axis=0)
-                if img == " 0":
-                    image_weight = np.append(image_weight,[0],axis=0)
-                else:
+def load_pascal(data_directory, split='train'): # split = train/test/val
+    cached_images = data_directory + '/images_' + split
+    cached_labels = data_directory + '/labels_' + split
+    cached_weights = data_directory + '/weights_' + split
+    if os.path.isfile(cached_images + '.npy') and \
+            os.path.isfile(cached_labels + '.npy') and \
+            os.path.isfile(cached_weights + '.npy'):
+        images = np.load(cached_images + '.npy')
+        labels = np.load(cached_labels + '.npy')
+        weights = np.load(cached_weights + '.npy')
+    
+    else:
+        image_file = open(data_directory + '/VOCdevkit/VOC2007/ImageSets/Main/' + split + '.txt','r').read()
+        split_image_file = image_file.split('\n')[:-1]
+        num_images = len(split_image_file)
+    
+        images = np.empty([num_images,224,224,3],dtype=np.float32)
+        labels = np.empty([num_images,NUM_CLASSES],dtype=np.int32)
+        weights = np.empty([num_images,NUM_CLASSES],dtype=np.int32)
+    
+        for i in range(num_images):
+            image_name  = split_image_file[i]
+            input_img   = Image.open(data_directory + '/VOCdevkit/VOC2007/JPEGImages/' + image_name + '.jpg')
+            scaled_img  = np.asarray(input_img.resize([224,224]))
+            images[i,:,:,:] = scaled_img[np.newaxis,:,:,:]
+            image_label     = np.empty([0])
+            image_weight    = np.empty([0])
+            for class_name in CLASS_NAMES:
+                split_file = open(data_directory + '/VOCdevkit/VOC2007/ImageSets/Main/' + class_name + '_' + split + '.txt','r').read()
+                img_pos = split_file.find(image_name)+len(image_name)+1
+                img = split_file[img_pos:img_pos+2]
+                if img == ' 1':
+                    image_label  = np.append(image_label,[1],axis=0)
                     image_weight = np.append(image_weight,[1],axis=0)
-        labels[i,:] = image_label
-        weights[i,:] = image_weight
+                else:
+                    image_label  = np.append(image_label,[0],axis=0)
+                    if img == ' 0':
+                        image_weight = np.append(image_weight,[0],axis=0)
+                    else:
+                        image_weight = np.append(image_weight,[1],axis=0)
+            labels[i,:] = image_label
+            weights[i,:] = image_weight
+        np.save(cached_images, images)
+        np.save(cached_labels, labels)
+        np.save(cached_weights, weights)
     return (images, labels, weights)
 
 
@@ -84,5 +99,5 @@ def main():
 
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
